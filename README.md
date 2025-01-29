@@ -1,6 +1,6 @@
 # Biofilm MAG analysis
  
-## R scripts to analyse bacterial metagenome assembled genomes (MAGs) from river biofilms  
+R scripts to analyse bacterial metagenome assembled genomes (MAGs) from river biofilms  
 
 ### Initial processing and analysis  
 1. Raw metagenomic reads are first processed according to [this workflow](https://github.com/amycthorpe/metag_analysis_EA) to assemble MAGs
