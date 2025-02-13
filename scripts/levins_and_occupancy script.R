@@ -108,14 +108,10 @@ colnames(occupancy)[2] <- "occupancy"
 total_samples <- ncol(coverage)
 
 # convert to percentage of total samples
-occupancy_percentage <- (occupancy / total_samples) * 100
-occupancy_percentage <- occupancy_percentage %>%
-  rownames_to_column(., var = "label")
-colnames(occupancy_percentage)[2] <- "percentage_occupancy"
+occupancy$percentage <- (occupancy$occupancy / total_samples) * 100
 
 # merge
-occupancy_percentage <- merge(occupancy, occupancy_percentage, by="label")
-occupancy_percentage_coverage <- merge(occupancy_percentage, coverage_mean, by="label")
+occupancy_percentage_coverage <- merge(occupancy, coverage_mean, by="label")
 occupancy_gtdb <- merge(occupancy_percentage_coverage, gtdb, by.x="label", by.y="row.names")
 
 
