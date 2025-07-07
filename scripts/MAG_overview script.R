@@ -30,6 +30,9 @@ checkm <- mutate(checkm, Completeness_quality = case_when(
   TRUE ~ "Low-quality MAGs"
 ))
 
+# filter low quality MAGs
+checkm_quality <- subset(checkm, Completeness_quality != "Low-quality MAGs")
+coverage_quality <- coverage[rownames(coverage) %in% rownames(checkm_quality), ]
 
 # set colours
 quality_colors <- c("Near-complete MAGs" = "forestgreen", "Medium-quality MAGs" = "steelblue3", "Low-quality MAGs" = "violetred")
@@ -193,7 +196,7 @@ ggsave("output/contam_compl_bar_plot.pdf", combined_bar_plot, width = 70, height
 
 # checkm histograms 
 # genome size
-checkm_filter <- checkm %>% 
+checkm_filter <- checkm_quality %>% 
   filter(., Genome_Size < 11400000) # remove large MAG outlier due to very high proportion protist genes (for plotting only)
 
 genome_size <- ggplot(checkm_filter, aes(x = Genome_Size_Mbp)) +
@@ -342,7 +345,7 @@ ggsave("output/contig_length_histogram.pdf", contig_length, width = 90, height =
 
 # GC content vs genome size vs abundance vs taxonomy
 # convert to relative abundance
-coverage_rel <- coverage %>%
+coverage_rel <- coverage_quality %>%
   mutate(across(everything(), ~ . / sum(.))) %>%
   t(.) # samples as rows
 
@@ -383,6 +386,152 @@ GC_size
 
 ggsave("output/GC_size.png", GC_size, width = 10, height = 6, units = "in", dpi = 600)
 ggsave("output/GC_size.pdf", GC_size, width = 70, height = 50, units = "mm", dpi = 600)
+
+
+GC_size <- ggplot(gtdb_checkm_coverage, aes(x = Genome_Size_Mbp, y = GC_Content, colour = phylum, size = mean_rel_abund)) +
+  geom_point(alpha = 0.5) +
+  theme_bw() +
+  theme(panel.border = element_rect(colour = "black", fill = NA, size = 0.4),
+        panel.background = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        legend.position = "right",
+        axis.title = element_text(size = 6, colour = "black"),
+        axis.text = element_text(size = 5, colour = "black")) +
+  labs(x = "Genome size (Mbp)", y = "GC content (%)") +
+  guides(colour = guide_legend(title = "Phylum"),
+         size = guide_legend(title = "Mean relative abundance")) +
+  scale_color_manual(values = phylum_colour_map) +
+  scale_size_continuous(range = c(0.2, 2)) +
+  scale_y_continuous(labels = function(x) x*100) +
+  scale_x_continuous(limits=c(0,12), breaks=seq(0,12,by=2)) # remove limits to include biggest MAG outlier
+
+GC_size
+
+ggsave("output/GC_size_legend.png", GC_size, width = 10, height = 6, units = "in", dpi = 600)
+ggsave("output/GC_size_legend.pdf", GC_size, width = 200, height = 500, units = "mm", dpi = 600)
+
+# coding density vs genome size vs abundance vs taxonomy
+coding_size <- ggplot(gtdb_checkm_coverage, aes(x = Genome_Size_Mbp, y = Coding_Density, colour = phylum, size = mean_rel_abund)) +
+  geom_point(alpha = 0.5) +
+  theme_bw() +
+  theme(panel.border = element_rect(colour = "black", fill = NA, size = 0.4),
+        panel.background = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        legend.position = "none",
+        axis.title = element_text(size = 6, colour = "black"),
+        axis.text = element_text(size = 5, colour = "black")) +
+  labs(x = "Genome size (Mbp)", y = "Coding density (%)") +
+  guides(colour = guide_legend(title = "Phylum"),
+         size = guide_legend(title = "Mean relative abundance")) +
+  scale_color_manual(values = phylum_colour_map) +
+  scale_size_continuous(range = c(0.2, 2)) +
+  scale_y_continuous(labels = function(x) x*100, limits=c(0.6,1), breaks=seq(0.6,1,by=0.1)) +
+  scale_x_continuous(limits=c(0,12), breaks=seq(0,12,by=2)) # remove limits to include biggest MAG outlier
+
+coding_size
+
+ggsave("output/coding_size.png", coding_size, width = 10, height = 6, units = "in", dpi = 600)
+ggsave("output/coding_size.pdf", coding_size, width = 70, height = 50, units = "mm", dpi = 600)
+
+# coding density vs genome size vs abundance vs taxonomy - facet top phyla
+coverage_phylum <- coverage_mean %>% 
+  merge(., checkm, by.y="row.names", by.x = "label") %>% 
+  group_by(phylum) %>% 
+  summarise(across(where(is.numeric), sum)) %>% 
+  arrange(desc(mean_rel_abund)) %>%
+  filter(mean_rel_abund > 0.03)
+
+gtdb_checkm_coverage2 <- gtdb_checkm_coverage %>% 
+  subset(., phylum %in% coverage_phylum$phylum)
+
+regression_labels <- gtdb_checkm_coverage2 %>%
+  group_by(phylum) %>%
+  do({model <- lm(Coding_Density ~ Genome_Size_Mbp, data = .)
+  summary_model <- summary(model)
+  tibble(intercept = coef(model)[1],
+         slope = coef(model)[2],
+         r2 = summary_model$r.squared)
+  }) %>%
+  mutate(label = paste0("y = ", round(slope, 3), "x + ", round(intercept, 3), "\nR² = ", round(r2, 2)), x = 9.5, y = 0.95)
+
+coding_size <- ggplot(gtdb_checkm_coverage2, aes(x = Genome_Size_Mbp, y = Coding_Density, colour = phylum, size = mean_rel_abund)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = "lm", se = F, aes(group = phylum, colour = phylum), size = 0.4) +
+  geom_text(data = regression_labels, aes(x = x, y = y, label = label), inherit.aes = FALSE,
+            hjust = 0, size = 1.7, colour = "black") +
+  theme_bw() +
+  theme(panel.border = element_rect(colour = "black", fill = NA, size = 0.4),
+        panel.background = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        legend.position = "none",
+        axis.title = element_text(size = 6, colour = "black"),
+        axis.text = element_text(size = 5, colour = "black")) +
+  labs(x = "Genome size (Mbp)", y = "Coding density (%)") +
+  guides(colour = guide_legend(title = "Phylum"),
+         size = guide_legend(title = "Mean relative abundance")) +
+  scale_color_manual(values = phylum_colour_map) +
+  scale_size_continuous(range = c(0.2, 2)) +
+  scale_y_continuous(labels = function(x) x*100, limits=c(0.6,1), breaks=seq(0.6,1,by=0.1)) +
+  scale_x_continuous(limits=c(0,12), breaks=seq(0,12,by=2)) + # remove limits to include biggest MAG outlier
+  facet_wrap(~phylum, ncol=2)
+
+coding_size
+
+ggsave("output/coding_size_facet.png", coding_size, width = 10, height = 6, units = "in", dpi = 600)
+ggsave("output/coding_size_facet.pdf", coding_size, width = 180, height = 180, units = "mm", dpi = 600)
+
+
+# gene length vs genome size vs abundance vs taxonomy
+length_size <- ggplot(gtdb_checkm_coverage, aes(x = Genome_Size_Mbp, y = Average_Gene_Length, colour = phylum, size = mean_rel_abund)) +
+  geom_point(alpha = 0.5) +
+  theme_bw() +
+  theme(panel.border = element_rect(colour = "black", fill = NA, size = 0.4),
+        panel.background = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        legend.position = "none",
+        axis.title = element_text(size = 6, colour = "black"),
+        axis.text = element_text(size = 5, colour = "black")) +
+  labs(x = "Genome size (Mbp)", y = "Average gene length") +
+  guides(colour = guide_legend(title = "Phylum"),
+         size = guide_legend(title = "Mean relative abundance")) +
+  scale_color_manual(values = phylum_colour_map) +
+  scale_size_continuous(range = c(0.2, 2)) +
+  scale_y_continuous(limits=c(190,390), breaks=seq(190,390,by=50)) +
+  scale_x_continuous(limits=c(0,12), breaks=seq(0,12,by=2)) # remove limits to include biggest MAG outlier
+
+length_size
+
+ggsave("output/length_size.png", length_size, width = 10, height = 6, units = "in", dpi = 600)
+ggsave("output/length_size.pdf", length_size, width = 70, height = 50, units = "mm", dpi = 600)
+
+
+# total coding seqs vs genome size vs abundance vs taxonomy
+total_coding_size <- ggplot(gtdb_checkm_coverage, aes(x = Genome_Size_Mbp, y = Total_Coding_Sequences, colour = phylum, size = mean_rel_abund)) +
+  geom_point(alpha = 0.5) +
+  theme_bw() +
+  theme(panel.border = element_rect(colour = "black", fill = NA, size = 0.4),
+        panel.background = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        legend.position = "none",
+        axis.title = element_text(size = 6, colour = "black"),
+        axis.text = element_text(size = 5, colour = "black")) +
+  labs(x = "Genome size (Mbp)", y = "Total coding sequences") +
+  guides(colour = guide_legend(title = "Phylum"),
+         size = guide_legend(title = "Mean relative abundance")) +
+  scale_color_manual(values = phylum_colour_map) +
+  scale_size_continuous(range = c(0.2, 2)) +
+  # scale_y_continuous(limits=c(190,390), breaks=seq(190,390,by=50)) +
+  scale_x_continuous(limits=c(0,12), breaks=seq(0,12,by=2)) # remove limits to include biggest MAG outlier
+
+total_coding_size
+
+ggsave("output/totalcodingseqs_size.png", total_coding_size, width = 10, height = 6, units = "in", dpi = 600)
+ggsave("output/totalcodingseqs_size.pdf", total_coding_size, width = 70, height = 50, units = "mm", dpi = 600)
 
 
 # genome size and environmental metadata
@@ -474,10 +623,10 @@ summary(model)
 
 # taxonomic novelty
 # subset to only near-complete (comment out to run on all MAGs)
-#checkm <- subset(checkm, Completeness_quality == "Near-complete MAGs")
+# checkm_quality <- subset(checkm, Completeness_quality == "Near-complete MAGs")
 
 # subset to taxonomy
-taxonomy <- checkm[, 14:20]
+taxonomy <- checkm_quality[, 14:20]
 
 # label empty taxonomy
 taxonomy_labelled <- taxonomy %>%
