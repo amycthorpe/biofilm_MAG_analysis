@@ -19,10 +19,20 @@ set.seed(123)
 bins <- read.csv("data/finalbins_coverage.csv", check.names=F, sep=",") %>% 
   dplyr::rename("Taxon"="bin")
 
-gtdb <- read.csv("data/checkm_gtdb.csv", row.names=1, check.names=F, sep=",") %>% 
-  select(14:20)
+checkm <- read.csv("data/checkm_gtdb.csv", row.names=1, check.names=F, sep=",")
+
+checkm <- mutate(checkm, Completeness_quality = case_when(
+  Completeness >= 90 & Contamination <= 5 ~ "Near-complete MAGs",
+  Completeness >= 70 & Completeness < 90 & Contamination <= 10 ~ "Medium-quality MAGs",
+  TRUE ~ "Low-quality MAGs"
+))
+
+checkm <- subset(checkm, Completeness_quality != "Low-quality MAGs") # filter low quality MAGs
+gtdb <- checkm[, 14:20]
 
 coverage <- read.csv("data/finalbins_coverage.csv", row.names=1, check.names=F, sep=",")
+coverage <- coverage[rownames(coverage) %in% rownames(checkm), ] # filter low quality MAGs
+bins <- bins[bins$Taxon %in% rownames(checkm), ] # filter low quality MAGs
 
 
 # calculate levins index
