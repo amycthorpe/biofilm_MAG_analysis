@@ -27,11 +27,21 @@ set.seed(123)
 
 
 # import data
-gtdb <- read.csv("data/checkm_gtdb.csv", row.names=1, check.names=F, sep=",") %>% 
-  select(14:20) %>% 
-  rownames_to_column(., var="label")
+checkm <- read.csv("data/checkm_gtdb.csv", row.names=1, check.names=F, sep=",")
+
+checkm <- mutate(checkm, Completeness_quality = case_when(
+  Completeness >= 90 & Contamination <= 5 ~ "Near-complete MAGs",
+  Completeness >= 70 & Completeness < 90 & Contamination <= 10 ~ "Medium-quality MAGs",
+  TRUE ~ "Low-quality MAGs"
+))
 
 coverage <- read.csv("data/finalbins_coverage.csv", row.names=1, check.names=F, sep=",")
+
+checkm <- subset(checkm, Completeness_quality != "Low-quality MAGs") # filter low quality MAGs
+coverage <- coverage[rownames(coverage) %in% rownames(checkm_quality), ]
+
+gtdb <- checkm[, 14:20] %>%
+  rownames_to_column(., var="label")
 
 # convert to relative abundance
 coverage_rel <- coverage %>%
@@ -49,6 +59,8 @@ fasta_file <- "data/gtdbtk.bac120.user_msa.fasta.gz"
 decompressed_file <- gunzip(fasta_file, remove = FALSE, temporary = TRUE)
 fasta_data <- readAAStringSet(decompressed_file)
 head(fasta_data)
+
+fasta_data <- fasta_data[names(fasta_data) %in% rownames(checkm)]
 
 
 # prepare tree data
@@ -124,5 +136,5 @@ plot <- ggtree(y_tax_cov_tree, branch.length="none", layout="fan", open.angle = 
 
 plot
 
-ggsave("output/tree_plot.pdf", plot3, width = 180, height = 170, units = "mm")
-ggsave("output/tree_plot.pdf", plot3, width = 150, height = 150, units = "mm")
+ggsave("output/tree_plot.pdf", plot, width = 180, height = 170, units = "mm")
+ggsave("output/tree_plot.pdf", plot, width = 150, height = 150, units = "mm")
