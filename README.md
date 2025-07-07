@@ -11,3 +11,6 @@ Outputs (available at: 10.5281/zenodo.14762144) can then be analysed with the pr
    * Assess the biogeography and taxonomic composition of biofilm bacterial communities
    * Determine the metabolic and functional potential of biofilm bacterial communities
    * Identify environmental drivers shaping biofilm bacterial communities with variance partitioning
+
+### Citation
+https://www.biorxiv.org/content/10.1101/2025.03.05.641783v1
