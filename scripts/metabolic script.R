@@ -14,10 +14,25 @@ set.seed(123)
 # import data
 metabolic <- read.csv("data/metabolic_results.csv", row.names=1, check.names=F, sep=",")
 
-gtdb <- read.csv("data/checkm_gtdb.csv", row.names=1, check.names=F, sep=",") %>% 
+coverage <- read.csv("data/finalbins_coverage.csv", row.names=1, check.names=F, sep=",")
+
+
+# filter low quality MAGs
+checkm <- read.csv("data/checkm_gtdb.csv", row.names=1, check.names=F, sep=",")
+
+checkm <- mutate(checkm, Completeness_quality = case_when(
+  Completeness >= 90 & Contamination <= 5 ~ "Near-complete MAGs",
+  Completeness >= 70 & Completeness < 90 & Contamination <= 10 ~ "Medium-quality MAGs",
+  TRUE ~ "Low-quality MAGs"
+))
+
+gtdb <- checkm %>% 
+  subset(., Completeness_quality != "Low-quality MAGs") %>% 
   select(14:20)
 
-coverage <- read.csv("data/finalbins_coverage.csv", row.names=1, check.names=F, sep=",")
+coverage <- coverage[rownames(coverage) %in% rownames(gtdb), ]
+metabolic <- metabolic[metabolic$bin %in% rownames(gtdb), ]
+
 
 # convert to relative abundance
 coverage_rel <- coverage %>%
@@ -152,3 +167,30 @@ plot
 
 ggsave("output/alluvial_plot_weighted.png", plot, width = 90, height = 100, units = "mm", dpi = 600)
 ggsave("output/alluvial_plot_weighted.pdf", plot, width = 90, height = 100, units = "mm", dpi = 600)
+
+
+# stats
+df <- metabolic_merged
+
+df$category <- ifelse(grepl("C-S", df$reaction), "Carbon", # add categories
+                      ifelse(grepl("N-S", df$reaction), "Nitrogen",
+                             ifelse(grepl("S-S", df$reaction), "Sulfur",
+                                    ifelse(grepl("O-S", df$reaction), "Others",""))))
+df$category <- as.factor(df$category)
+
+df$reaction <- sub(".*:", "", df$reaction) # simplify reaction names
+
+summary <- df %>%
+  filter(presence == 1) %>%
+  distinct(bin, category) %>%
+  count(category) %>%
+  mutate(percent_bins = (num_bins / 820) * 100)
+
+energy.flow_totals <- energy.flow %>% 
+  group_by(phylum) %>% 
+  summarise(contribution = sum(phylum_abund))
+
+total <- sum(energy.flow$phylum_abund)
+
+energy.flow_percent <- energy.flow_totals %>%
+  mutate(percentage = (contribution / total) * 100)
